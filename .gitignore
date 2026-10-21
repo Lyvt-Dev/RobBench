@@ -1,0 +1,9 @@
+build/
+out/
+*.user
+.vs/
+vcpkg_installed/
+smoke-output/
+
+.tools/
+.vcpkg-cache/

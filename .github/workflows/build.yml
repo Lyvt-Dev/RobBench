@@ -1,0 +1,94 @@
+name: Native builds
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [debug, release]
+    env:
+      VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/vcpkg
+          ref: fde371c46cf7afa9c040fe313d2557c611d1329d
+          path: .tools/vcpkg
+      - uses: actions/cache@v4
+        with:
+          path: .vcpkg-cache
+          key: windows-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: windows-vcpkg-
+      - name: Bootstrap dependencies
+        shell: pwsh
+        run: |
+          ./.tools/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "VCPKG_ROOT=$env:GITHUB_WORKSPACE/.tools/vcpkg" >> $env:GITHUB_ENV
+      - name: Configure
+        run: ./scripts/dev.ps1 configure windows-${{ matrix.configuration }}
+      - name: Build
+        run: ./scripts/dev.ps1 build windows-${{ matrix.configuration }}
+      - name: Test
+        run: ./scripts/dev.ps1 test windows-${{ matrix.configuration }}
+      - name: Install NSIS
+        if: matrix.configuration == 'release'
+        run: choco install nsis --no-progress -y
+      - name: Package
+        if: matrix.configuration == 'release'
+        run: ./scripts/dev.ps1 package windows-release
+      - uses: actions/upload-artifact@v4
+        if: matrix.configuration == 'release'
+        with:
+          name: RobBench-windows-x64
+          path: |
+            RobBench-*.zip
+            RobBench-*.exe
+          if-no-files-found: error
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ qt6-base-dev libvulkan-dev mesa-vulkan-drivers glslang-tools libglm-dev nlohmann-json3-dev libspdlog-dev libgtest-dev vulkan-validationlayers xvfb xauth
+          mkdir -p "$RUNNER_TEMP/vma"
+          curl --fail --location https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.2.1/include/vk_mem_alloc.h --output "$RUNNER_TEMP/vma/vk_mem_alloc.h"
+      - name: Configure
+        run: cmake --preset linux-debug -DVMA_INCLUDE_DIR="$RUNNER_TEMP/vma" -DROBBENCH_VULKAN_TESTS=ON
+      - name: Build
+        run: cmake --build --preset linux-debug --parallel 2
+      - name: Test native editor and core
+        run: xvfb-run -a ctest --preset linux-debug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RobBench-linux-validation
+          path: |
+            build/linux-debug/Testing/Temporary/LastTest.log
+            build/linux-debug/smoke-*/
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RobBench-windows-x64
+          path: release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

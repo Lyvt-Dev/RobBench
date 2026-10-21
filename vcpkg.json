@@ -1,0 +1,42 @@
+{
+  "name": "robbench",
+  "version-string": "0.1.0",
+  "description": "Native Qt and Vulkan Roblox animation editor",
+  "dependencies": [
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [
+        "widgets",
+        "vulkan",
+        "windeployqt"
+      ],
+      "platform": "windows"
+    },
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [
+        "widgets",
+        "vulkan"
+      ],
+      "platform": "!windows"
+    },
+    "vulkan",
+    "vulkan-memory-allocator",
+    "glm",
+    "nlohmann-json",
+    "spdlog",
+    "gtest",
+    "assimp",
+    "tinygltf",
+    "stb",
+    {
+      "name": "glslang",
+      "features": [
+        "tools"
+      ]
+    }
+  ],
+  "builtin-baseline": "fde371c46cf7afa9c040fe313d2557c611d1329d"
+}
