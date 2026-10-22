@@ -1,6 +1,6 @@
 # Development status
 
-Version 0.1 is a buildable, functional foundation. **The complete master specification and Studio end-to-end
+Version 0.1.1 is a buildable, functional foundation. **The complete master specification and Studio end-to-end
 acceptance are not complete.** No final parity, performance, avatar accuracy or cross-platform acceptance is claimed.
 
 ## Implemented
@@ -8,7 +8,9 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 - C++20/CMake/vcpkg setup; native Qt Widgets shell and Vulkan 1.3 integration.
 - Dockable dark panels, Animate/Edit/Display panel presets, saved custom layout and geometry.
 - Real shaded block viewport, grid/world ground axes, camera orbit/pan/zoom, front/right/top,
-  orthographic/perspective, selection tint, focus, ray-box picking, resize lifecycle.
+  orthographic/perspective, selection tint, focus, ray-box picking, resize lifecycle, optional 4x MSAA.
+- W/E/R move/rotate/resize handles, local/world joint axes, Shift/toolbar snapping, Esc/focus-loss cancellation,
+  isolated previews and one undo command per drag. Geometry resizing uses part-local axes without scale keyframes.
 - R6/R15 connected block templates; custom hierarchy data, exact arbitrary rigid C0/C1, validation.
 - Inspector joint position/quaternion rotation authoring; part sizes, visibility, locking.
 - Multiple clips: new/rename/duplicate/delete; duration/loop; add/replace/delete/move keys; frame snapping;
@@ -19,7 +21,8 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 - Studio companion: avatar import through official APIs, exact rig JSON export, strict animation import,
   matching block rig construction, sequence preview APIs, Studio history entries and diagnostics.
 - Automated mathematical/core/file/export tests and native editor/Vulkan smoke tests.
-- Windows CI, portable ZIP/NSIS packaging definitions, tagged release workflow (not yet run remotely).
+- Successful Windows Debug/Release builds, core tests and ZIP/NSIS generation in CI; Ubuntu Qt 6.4 compatibility.
+- Extracted Windows package runtime-check step and tagged-release workflow. No tagged release has been published.
 
 ## Exact remaining work, by roadmap phase
 
@@ -27,10 +30,11 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 
 - Hardware and Windows validation; macOS/MoltenVK integration; Vulkan failure/device-loss recovery tests.
 - Proper linear/sRGB material pipeline, textured mesh buffers, index buffers, descriptors, uniforms/storage,
-  texture images/samplers/staging, transparency, antialiasing controls, shadow maps, outlines, bone display.
+  texture images/samplers/staging, transparency, additional quality settings, shadow maps, outlines, bone display.
 - Instancing, frustum culling, buffer/texture resource caches, disk pipeline caching, asynchronous assets,
   measurement-driven multithreading, CPU/GPU profiling, GTX 1060 memory/frame-time measurements.
-- Configurable shortcuts, W/E/R tools and interactive transform gizmos; local/global editing; all six standard views.
+- Configurable shortcuts and all six standard views; current gizmos support axis-constrained joint move/rotation
+  and part-local block resizing.
 - Professional icon set, project dialog, all workspace layouts, full persistent settings UI and customization.
 
 ### Rigging and first Studio acceptance
@@ -65,11 +69,11 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 
 ### Distribution/polish
 
-- Run Windows CI and inspect both installer and portable package on a clean machine without Visual Studio.
+- Inspect both Windows installer and portable package on a clean machine without Visual Studio, including actual GPU rendering.
 - Verify deployment of MSVC runtime/Qt plugins/non-Qt DLLs and dependency licenses; signing is not configured.
 - Run sanitizers, fuzz corrupted files, large-scene/long-clip stress tests, UI automation and crash recovery tests.
 - Harden memory use: history currently copies whole documents; track lookup is linear; rig traversal is recursive.
 - Plugin infrastructure/ABI, settings migration, accessibility, localization and a complete Blockbench workflow parity audit.
 
-Next acceptance gate: run both Studio workflows and fix any API/runtime issues, then establish a tested Windows
-artifact before broadening into mesh editing. Existing tests and the authoring/export path must remain intact.
+Next acceptance gate: run both Studio workflows and fix any API/runtime issues, then verify Windows installation
+and GPU rendering on a clean machine. Existing tests and the authoring/export path must remain intact.

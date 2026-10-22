@@ -19,6 +19,7 @@ physical-device support. The renderer creates RAII-lifetime-scoped VMA resources
 vertex buffer, a pipeline layout, SPIR-V modules, graphics pipeline and in-memory pipeline cache.
 A shared cube is transformed for every part/grid segment using push constants; no buffers are allocated
 per frame. Normals use joint-world orientation. This renderer currently supports block parts and simple lighting.
+4x multisample rendering is enabled when supported, with a persisted next-launch preference.
 No instancing, culling, shadows, image descriptors/textures, GPU timestamps or GPU picking are claimed.
 
 The renderer has Qt resource lifecycle release hooks. Handles start null and partial initialization can
@@ -36,3 +37,11 @@ custom mesh transfer and automatic retargeting are not implemented.
 
 Future boundaries: modeling mesh topology, materials/textures, UVs, graph curves, IK, physics baking,
 asset import jobs and a safe versioned plugin ABI should be separate libraries rather than expanding the UI controller.
+
+`modeling/TransformGizmo` contains GUI-independent ray/handle picking and transform-drag mathematics.
+The drag snapshots a pose and previews from that snapshot; it never mutates the project. `renderer/Viewport`
+converts native mouse coordinates into camera rays and coordinates the drag lifecycle. The Vulkan renderer
+uses a separate no-depth overlay pipeline for handles and the same persistent cube buffer for their segments.
+`ui/TransformToolbar` connects previews to inspector values and commits one validated history command.
+`ui/EditorSmokeTest` isolates the automated native workflow from ordinary MainWindow lifecycle code.
+The MainWindow destructor clears viewport callbacks and document references before Qt destroys child windows.

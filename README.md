@@ -13,7 +13,8 @@ See [verified capabilities and remaining work](docs/STATUS.md) before evaluating
 - Dockable dark desktop editor with outliner, properties, timeline, and saved layouts.
 - R6 and R15 block authoring templates; custom Motor6D hierarchies through project import.
 - Vulkan rendering with VMA, GLSL/SPIR-V, depth testing, directional shading, grid and selection tint.
-- Orbit/pan/zoom, perspective/orthographic views, focus, and ray picking.
+- Orbit/pan/zoom, perspective/orthographic views, focus, ray picking and optional 4x MSAA.
+- Direct move/rotate/resize gizmos, local/world joint axes, snapping and transactional drag undo.
 - Joint position/rotation editing, multiple clips, key insertion/deletion/dragging, frame snapping, loop/playback.
 - Quaternion SLERP with linear, step, ease-in/out and smoothstep easing.
 - Undo/redo, atomic `.robbench` saves, reopen, recovery snapshots, recent files.
@@ -43,7 +44,9 @@ Portable ZIP and NSIS installer (install NSIS first):
 ./scripts/dev.ps1 package windows-release
 ```
 
-Windows build/installer generation is configured but has **not been executed in this Linux environment**.
+Windows Debug/Release compilation, core tests and ZIP/NSIS generation have passed in GitHub Actions.
+The latest workflow also checks that the extracted Windows application can load its native Qt platform and runtime DLLs.
+Actual Windows GPU rendering and interactive clean-machine installation remain manual verification steps.
 GitHub Actions runs both configurations and only packages after tests pass. Tagged `v*` builds release the tested packages.
 
 Linux: install Qt 6 Widgets development files, Vulkan 1.3 headers/loader and driver, glslangValidator,
@@ -75,6 +78,9 @@ macOS/MoltenVK support is not yet verified or packaged.
 Keys hold their first value before their first timestamp, so insert a rest key **before** the first rotation.
 Inspector edits automatically key the selected joint. The easing selector applies to newly inserted/edited keys;
 set the selector and press K to change an existing key's outgoing interpolation.
+Press **W**, **E** or **R** to move/rotate joints or resize block geometry directly in the viewport.
+Drag a colored axis/ring; Shift snaps, Esc cancels, and releasing commits one undo step.
+See [transform controls and pivot semantics](docs/TRANSFORMS.md).
 Drag timeline diamonds to move keys; occupied destinations are rejected. Ctrl+wheel zooms the timeline.
 F focuses selection; 1/3/7 select front/right/top; 5 toggles orthographic; Shift+K deletes the current key.
 Delete removes the selected part and its descendants. Cube creation uses Ctrl+Shift+C.
@@ -94,7 +100,9 @@ ctest --test-dir build/linux-debug --output-on-failure
 ./build/linux-debug/RobBench --smoke-test build/smoke --smoke-rig R15
 ```
 
-The smoke test saves a project, reopens it, exports animation, exercises editor operations and captures real viewport pixels.
+The smoke test saves a project, reopens it, exports animation, exercises mouse-driven move/rotate/resize,
+preview isolation, cancellation, undo/redo and input shortcut protection, and captures real viewport pixels.
+`RobBench --check-runtime` checks native Qt/platform startup without requiring Vulkan device initialization.
 See [validation results](docs/VALIDATION.md), [format specification](docs/FORMATS.md),
 [architecture](docs/ARCHITECTURE.md) and [reference research](docs/REFERENCES.md).
 

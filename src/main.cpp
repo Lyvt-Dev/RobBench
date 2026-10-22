@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("RobBench");
     QApplication::setOrganizationName("RobBench");
-    QApplication::setApplicationVersion("0.1.0");
+    QApplication::setApplicationVersion("0.1.1");
     auto arguments = app.arguments();
     const bool smoke = arguments.contains("--smoke-test");
     if (smoke) {
@@ -42,6 +42,16 @@ int main(int argc, char **argv) {
         p.setColor(QPalette::Highlight, QColor("#7959ab"));
         p.setColor(QPalette::HighlightedText, Qt::white);
         app.setPalette(p);
+        if (arguments.contains("--check-runtime")) {
+            QWidget probe;
+            probe.setWindowTitle("RobBench runtime check");
+            probe.resize(160, 90);
+            probe.createWinId();
+            spdlog::info("Runtime check passed: Qt {} and native platform loaded. Vulkan device rendering "
+                         "was not tested.",
+                         qVersion());
+            return 0;
+        }
         std::atomic_bool validationFailed{false};
         QVulkanInstance instance;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)

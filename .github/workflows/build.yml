@@ -46,6 +46,13 @@ jobs:
       - name: Package
         if: matrix.configuration == 'release'
         run: ./scripts/dev.ps1 package windows-release
+      - name: Verify extracted Windows runtime
+        if: matrix.configuration == 'release'
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem RobBench-*.zip | Select-Object -First 1
+          if (-not $archive) { throw "Portable ZIP was not generated" }
+          ./scripts/verify-package.ps1 -Archive $archive.FullName
       - uses: actions/upload-artifact@v4
         if: matrix.configuration == 'release'
         with:

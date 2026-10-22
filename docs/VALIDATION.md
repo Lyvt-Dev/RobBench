@@ -1,5 +1,7 @@
 # Validation record
 
+## Initial foundation — 2026-10-21
+
 Date: 2026-10-21. Debian 13 x64; GCC 14.2; CMake 3.31.6; Qt 6.8.2; Vulkan headers/loader 1.4.309;
 VMA 3.2.1; Mesa llvmpipe Vulkan software device (LLVM 19.1.7). No physical GPU or Studio was available.
 Development dependencies were extracted to a local prefix because the session user cannot install system packages.
@@ -20,14 +22,14 @@ Executed:
 Final Debug CTest run: **15/15 passed** (1.33 seconds). Final Release CTest run: **15/15 passed** (1.08 seconds).
 Both include R6 and R15 native Vulkan editor workflows.
 Debug and Release Linux CPack TGZ generation succeeded; the archive is a development artifact, not a verified standalone distribution.
-Windows build and installer generation have not been run. The vcpkg Linux dependency-resolution dry run succeeded;
+At this initial local milestone, Windows build and installer generation had not been run. The vcpkg Linux dependency-resolution dry run succeeded;
 a Windows-target plan could not complete on this Linux host without a Windows compiler, so it is not treated as a successful Windows dependency/build check.
 Test source remains authoritative.
 Generated captures and interchange examples are under `build/local/smoke-R6` and `build/local/smoke-R15`
 when the optional Vulkan tests are enabled. Build products are deliberately gitignored.
 
 Not executed: Roblox Studio plugin installation or runtime, actual avatar API requests, Roblox animation playback,
-Windows compilation, Windows clean-machine packages, tagged GitHub release, macOS, hardware performance or VRAM tests.
+Windows clean-machine installation/GPU rendering, tagged GitHub release, macOS, hardware performance or VRAM tests.
 Luau compilation checks syntax, not availability or runtime behavior of Roblox services.
 Do not interpret software-Vulkan smoke success as a 60 FPS or GTX 1060 acceptance result.
 
@@ -38,3 +40,19 @@ Windows Debug and Release successfully and produced the Windows ZIP/NSIS artifac
 core tests and package generation, not GPU rendering or installation on a clean Windows machine.
 The Ubuntu 24.04 job failed at configure because Qt 6.4 uses `FILENAME_VARIABLE` for the deployment script
 output; Qt 6.5+ uses `OUTPUT_SCRIPT`. CMake now chooses the appropriate spelling.
+
+[Run 39756476768](https://github.com/Lyvt-Dev/RobBench/actions/runs/39756476768), commit `079ab7b`,
+subsequently passed Linux and both Windows configurations, confirming the Qt 6.4 configure fix.
+
+## Transform editing — 2026-10-22
+
+The suite now includes six independent gizmo-math tests and extended native R6/R15 editor workflows.
+Coverage includes ray/axis and ray/plane degeneracy, actual C0/C1 joint pivots, world-to-joint translation,
+world rotation with connected children, snapping, geometry resizing/clamping, locked/scaled rigs, preview
+isolation, one command per drag, undo/redo, Esc cancellation, no-op clicks, fine inspector rotations, and
+shortcut suppression while typing. Native tests render real handles with 4x MSAA on the software Vulkan device.
+
+Debug: **21/21 passed** (1.66 seconds), with validation enabled and no reported VUID errors.
+Release: **21/21 passed** (1.30 seconds).
+`RobBench --check-runtime` passed locally. Windows CI additionally extracts the portable ZIP and runs this
+mode to check required DLL/native Qt-platform startup; that mode explicitly does not test a Vulkan device.

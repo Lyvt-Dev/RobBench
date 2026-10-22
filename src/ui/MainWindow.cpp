@@ -72,7 +72,10 @@ MainWindow::MainWindow(QVulkanInstance *instance) : project(makeRig("R15")) {
     setDockNestingEnabled(true);
     viewport = new Viewport;
     viewport->setVulkanInstance(instance);
-    viewport->setSampleCount(1);
+    viewport->setSampleCount(QSettings().value("viewportMsaa", true).toBool() &&
+                                     viewport->supportedSampleCounts().contains(4)
+                                 ? 4
+                                 : 1);
     viewport->project = &project;
     setCentralWidget(QWidget::createWindowContainer(viewport));
     viewport->selectionChanged = [this](int i) { select(i); };
@@ -83,6 +86,7 @@ MainWindow::MainWindow(QVulkanInstance *instance) : project(makeRig("R15")) {
     };
     createPanels();
     createMenus();
+    createTransformTools();
     connect(&history, &QUndoStack::cleanChanged, this, [this] { setWindowModified(!history.isClean()); });
     setWindowTitle("RobBench — Untitled[*]");
     connect(&playback, &QTimer::timeout, this, [this] {
@@ -123,6 +127,20 @@ MainWindow::MainWindow(QVulkanInstance *instance) : project(makeRig("R15")) {
             openProject(recoveryPath());
     });
 }
+MainWindow::~MainWindow() {
+    playback.stop();
+    autosave.stop();
+    refreshing = true;
+    viewport->cancelDrag();
+    viewport->project = nullptr;
+    viewport->selectionChanged = {};
+    viewport->failed = {};
+    viewport->frameRendered = {};
+    viewport->editStarted = {};
+    viewport->editPreviewed = {};
+    viewport->editCommitted = {};
+    viewport->editCancelled = {};
+}
 void MainWindow::createPanels() {
     auto dock = [this](QString title, QString id, QWidget *widget, Qt::DockWidgetArea area) {
         auto *d = new QDockWidget(title, this);
@@ -136,7 +154,8 @@ void MainWindow::createPanels() {
     outliner->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     outliner->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     outliner->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    outliner->setMinimumWidth(270);
+    outliner->setMinimumWidth(340);
+    outliner->setIndentation(14);
     outliner->setSelectionMode(QAbstractItemView::SingleSelection);
     dock("Outliner", "outliner", outliner, Qt::LeftDockWidgetArea);
     connect(outliner, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem *item) {
@@ -180,6 +199,8 @@ void MainWindow::createPanels() {
                 return;
             int n = viewport->selected;
             float v = static_cast<float>(dimensions[i]->value());
+            if (std::abs(v - project.parts[n].size[i]) < 1e-5f)
+                return;
             change("Resize part", [=](Project &p) {
                 if (!p.parts[n].locked)
                     p.parts[n].size[i] = v;
@@ -428,6 +449,15 @@ void MainWindow::createMenus() {
         viewport->showGrid = b;
         viewport->requestUpdate();
     });
+    auto *antialias = action(view, "4x anti-aliasing (next launch)", {}, [] {});
+    antialias->setCheckable(true);
+    antialias->setEnabled(viewport->supportedSampleCounts().contains(4));
+    antialias->setChecked(viewport->supportedSampleCounts().contains(4) &&
+                          QSettings().value("viewportMsaa", true).toBool());
+    connect(antialias, &QAction::toggled, this, [this](bool enabled) {
+        QSettings().setValue("viewportMsaa", enabled);
+        statusBar()->showMessage("Viewport anti-aliasing setting saved; takes effect next launch.", 5000);
+    });
     action(view, "Focus selection", QKeySequence("F"), [this] {
         if (!typing())
             viewport->focusSelected();
@@ -450,7 +480,7 @@ void MainWindow::createMenus() {
     auto *help = menuBar()->addMenu("&Help");
     action(help, "About RobBench", {}, [this] {
         QMessageBox::about(this, "RobBench",
-                           "RobBench 0.1 — native C++20 / Qt 6 / Vulkan 1.3\nR6/R15 animation authoring "
+                           "RobBench 0.1.1 — native C++20 / Qt 6 / Vulkan 1.3\nR6/R15 animation authoring "
                            "foundation.\nIndependent project; not affiliated with Roblox or Blockbench.\nSee "
                            "docs/STATUS.md for verified capabilities and limitations.");
     });
@@ -472,6 +502,7 @@ void MainWindow::createMenus() {
 }
 void MainWindow::refresh(bool tree) {
     refreshing = true;
+    viewport->cancelDrag();
     activeClip = std::min(activeClip, project.clips.size() - 1);
     time = std::clamp(time, 0., project.clips[activeClip].duration);
     viewport->pose = evaluatePose(project, activeClip, time);
@@ -500,9 +531,18 @@ void MainWindow::refresh(bool tree) {
         if (viewport->selected >= 0)
             outliner->setCurrentItem(items[viewport->selected]);
     }
-    clips->clear();
-    for (const auto &c : project.clips)
-        clips->addItem(QString::fromStdString(c.name));
+    bool clipListChanged = clips->count() != static_cast<int>(project.clips.size());
+    if (!clipListChanged)
+        for (int i = 0; i < clips->count(); ++i)
+            if (clips->itemText(i) != QString::fromStdString(project.clips[i].name)) {
+                clipListChanged = true;
+                break;
+            }
+    if (clipListChanged) {
+        clips->clear();
+        for (const auto &c : project.clips)
+            clips->addItem(QString::fromStdString(c.name));
+    }
     clips->setCurrentIndex(static_cast<int>(activeClip));
     const auto &c = project.clips[activeClip];
     timeBox->setRange(0, c.duration);
@@ -536,7 +576,12 @@ void MainWindow::refresh(bool tree) {
 }
 void MainWindow::select(int i) {
     viewport->selected = i;
+    viewport->hoveredAxis = -1;
     refresh(false);
+    if (i < 0) {
+        outliner->clearSelection();
+        return;
+    }
     if (i >= 0) {
         refreshing = true;
         QTreeWidgetItemIterator iter(outliner);
@@ -582,6 +627,11 @@ void MainWindow::editTransform() {
         pose.position[n] = static_cast<float>(transforms[n]->value());
     pose.rotation = glm::normalize(glm::quat(
         glm::radians(glm::vec3(transforms[3]->value(), transforms[4]->value(), transforms[5]->value()))));
+    const auto &current = viewport->pose[i];
+    if (glm::length(pose.position - current.position) < 1e-5f &&
+        std::min(glm::length(pose.rotation - current.rotation),
+                 glm::length(pose.rotation + current.rotation)) < 1e-6f)
+        return;
     double t = time;
     auto joint = project.parts[i].joint;
     auto mode = interpolation->currentIndex();
@@ -748,94 +798,5 @@ void MainWindow::closeEvent(QCloseEvent *e) {
     s.setValue("layout", saveState(1));
     QFile::remove(recoveryPath());
     e->accept();
-}
-void MainWindow::startSmokeTest(const QString &dir, const QString &rigType) {
-    project = makeRig(rigType.toStdString());
-    activeClip = 0;
-    time = 0;
-    history.clear();
-    refresh();
-    const int arm = rigType == "R6" ? 3 : 4;
-    const int pickedArm = rigType == "R6" ? 4 : 10;
-    QDir().mkpath(dir);
-    select(arm);
-    insertKey();
-    seek(1);
-    transforms[3]->setValue(70);
-    editTransform();
-    const auto keyed = projectJson(project);
-    history.undo();
-    if (projectJson(project) == keyed)
-        throw std::runtime_error("Smoke: rotation undo failed");
-    history.redo();
-    if (projectJson(project) != keyed)
-        throw std::runtime_error("Smoke: rotation redo failed");
-    seek(2);
-    transforms[3]->setValue(0);
-    editTransform();
-    saveProject(project, pathOf(dir + "/smoke.robbench"));
-    project = loadProject(pathOf(dir + "/smoke.robbench"));
-    exportAnimation(project, 0, pathOf(dir + "/smoke.rbanim"));
-    seek(.5);
-    if (std::abs(transforms[3]->value() - 35) > 0.01)
-        throw std::runtime_error("Smoke: interpolated inspector pose is wrong");
-    const auto beforeCamera = viewport->viewProjection();
-    QMouseEvent press(QEvent::MouseButtonPress, QPointF(200, 200), QPointF(200, 200), Qt::RightButton,
-                      Qt::RightButton, Qt::NoModifier);
-    QApplication::sendEvent(viewport, &press);
-    QMouseEvent move(QEvent::MouseMove, QPointF(240, 210), QPointF(240, 210), Qt::NoButton, Qt::RightButton,
-                     Qt::NoModifier);
-    QApplication::sendEvent(viewport, &move);
-    if (viewport->viewProjection() == beforeCamera)
-        throw std::runtime_error("Smoke: orbit camera did not respond");
-    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(240, 210), QPointF(240, 210), Qt::RightButton,
-                        Qt::NoButton, Qt::NoModifier);
-    QApplication::sendEvent(viewport, &release);
-    auto frames = std::make_shared<int>(0);
-    viewport->frameRendered = [this, dir, frames, pickedArm] {
-        if (++*frames == 3)
-            QTimer::singleShot(100, this, [this, dir, pickedArm] {
-                auto worlds = worldMatrices(project, viewport->pose);
-                auto clip = viewport->viewProjection() * worlds[pickedArm] * glm::vec4(0, 0, 0, 1);
-                auto ndc = glm::vec3(clip) / clip.w;
-                QPointF pixel((ndc.x + 1) * .5 * viewport->width(), (ndc.y + 1) * .5 * viewport->height());
-                if (viewport->pick(pixel) != pickedArm) {
-                    spdlog::error("Smoke: viewport picking failed");
-                    QApplication::exit(4);
-                    return;
-                }
-                auto full = screen()->grabWindow(winId()).toImage();
-                auto origin = viewport->mapToGlobal(QPoint(0, 0)) - mapToGlobal(QPoint(0, 0));
-                auto image = full.copy(QRect(origin, viewport->size()));
-                if (image.isNull() || !image.save(dir + "/viewport.png")) {
-                    spdlog::error("Viewport capture failed");
-                    QApplication::exit(3);
-                    return;
-                }
-                full.save(dir + "/editor.png");
-                togglePlay();
-                const double initial = time;
-                QTimer::singleShot(100, this, [this, initial] {
-                    if (!playing || time <= initial) {
-                        spdlog::error("Smoke: playback did not advance");
-                        QApplication::exit(5);
-                        return;
-                    }
-                    togglePlay();
-                    resize(1240, 820);
-                    QTimer::singleShot(100, this, [] {
-                        spdlog::info("Editor workflow, Vulkan frames, playback and resize completed");
-                        QApplication::exit(0);
-                    });
-                });
-            });
-        else if (*frames < 3)
-            viewport->requestUpdate();
-    };
-    QTimer::singleShot(20000, this, [] {
-        spdlog::error("Vulkan smoke test timed out");
-        QApplication::exit(2);
-    });
-    viewport->requestUpdate();
 }
 } // namespace rb

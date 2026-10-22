@@ -18,6 +18,7 @@ class Timeline;
 class MainWindow final : public QMainWindow {
   public:
     explicit MainWindow(QVulkanInstance *instance);
+    ~MainWindow() override;
     void startSmokeTest(const QString &directory, const QString &rigType = "R15");
 
   protected:
@@ -61,6 +62,8 @@ class MainWindow final : public QMainWindow {
     void showError(const std::exception &);
     void createMenus();
     void createPanels();
+    void createTransformTools();
+    void runGizmoSmokeTest();
     void remember(const QString &path);
     QString recoveryPath() const;
 };
