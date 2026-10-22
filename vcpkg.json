@@ -1,6 +1,6 @@
 {
   "name": "robbench",
-  "version-string": "0.1.1",
+  "version-string": "0.1.0",
   "description": "Native Qt and Vulkan Roblox animation editor",
   "dependencies": [
     {

@@ -1,6 +1,6 @@
 # Direct viewport transforms
 
-RobBench 0.1.1 provides interactive, axis-constrained handles in the native Vulkan viewport.
+RobBench 0.1.0 provides interactive, axis-constrained handles in the native Vulkan viewport.
 Select a part first, then choose a tool from the toolbar:
 
 | Tool | Shortcut | Result |

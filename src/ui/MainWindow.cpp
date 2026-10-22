@@ -480,7 +480,7 @@ void MainWindow::createMenus() {
     auto *help = menuBar()->addMenu("&Help");
     action(help, "About RobBench", {}, [this] {
         QMessageBox::about(this, "RobBench",
-                           "RobBench 0.1.1 — native C++20 / Qt 6 / Vulkan 1.3\nR6/R15 animation authoring "
+                           "RobBench 0.1.0 — native C++20 / Qt 6 / Vulkan 1.3\nR6/R15 animation authoring "
                            "foundation.\nIndependent project; not affiliated with Roblox or Blockbench.\nSee "
                            "docs/STATUS.md for verified capabilities and limitations.");
     });

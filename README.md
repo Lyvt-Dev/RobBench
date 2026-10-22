@@ -23,10 +23,9 @@ See [verified capabilities and remaining work](docs/STATUS.md) before evaluating
 
 ## Windows download
 
-[RobBench 0.1.1 — portable ZIP and installer](https://github.com/Lyvt-Dev/RobBench/actions/runs/39759425592/artifacts/12417088501)
-from the [verified CI run](https://github.com/Lyvt-Dev/RobBench/actions/runs/39759425592).
-The outer artifact ZIP contains the portable package and NSIS installer. Build/core tests and extracted-runtime
-startup passed; actual GPU rendering and clean-machine installation remain to be verified.
+[RobBench v0.1.0 — Windows portable ZIP and installer](https://github.com/Lyvt-Dev/RobBench/releases/tag/v0.1.0).
+The release also includes the Roblox Studio companion plugin source. Windows GPU rendering, clean-machine
+interactive installation and Roblox Studio playback remain to be verified; see the release notes.
 
 ## Build
 

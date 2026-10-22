@@ -1,6 +1,6 @@
 # Development status
 
-Version 0.1.1 is a buildable, functional foundation. **The complete master specification and Studio end-to-end
+Version 0.1.0 is a buildable, functional foundation. **The complete master specification and Studio end-to-end
 acceptance are not complete.** No final parity, performance, avatar accuracy or cross-platform acceptance is claimed.
 
 ## Implemented
