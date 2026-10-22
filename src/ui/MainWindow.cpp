@@ -695,6 +695,7 @@ void MainWindow::newProject() {
         return;
     playing = false;
     playback.stop();
+    timeline->setSelection({});
     project = makeRig(type.toStdString());
     activeClip = 0;
     time = 0;
@@ -716,6 +717,7 @@ void MainWindow::openProject(const QString &given) {
         auto loaded = loadProject(pathOf(path));
         playing = false;
         playback.stop();
+        timeline->setSelection({});
         project = std::move(loaded);
         activeClip = 0;
         time = 0;
