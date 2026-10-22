@@ -1,6 +1,6 @@
 # Development status
 
-Version 0.1.0 is a buildable, functional foundation. **The complete master specification and Studio end-to-end
+Version 0.2.0 is a buildable, functional foundation. **The complete master specification and Studio end-to-end
 acceptance are not complete.** No final parity, performance, avatar accuracy or cross-platform acceptance is claimed.
 
 ## Implemented
@@ -22,7 +22,7 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
   matching block rig construction, sequence preview APIs, Studio history entries and diagnostics.
 - Automated mathematical/core/file/export tests and native editor/Vulkan smoke tests.
 - Successful Windows Debug/Release builds, core tests and ZIP/NSIS generation in CI; Ubuntu Qt 6.4 compatibility.
-- Extracted Windows package runtime-check step and tagged-release workflow. No tagged release has been published.
+- Extracted Windows package runtime-check step and tagged-release workflow. Version 0.1.0 was published with Windows packages.
 
 ## Exact remaining work, by roadmap phase
 
@@ -49,7 +49,7 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 
 ### Animation/export
 
-- Timeline multi-selection, clipboard/copy/paste/duplicate/mirror/time-scale keys, markers, events, loop regions,
+- Timeline duplicate/mirror commands, markers, events, loop regions,
   custom FPS UI, speed UI, multiple-track controls, clip-name conflict UX.
 - Cubic Bézier curve representation, tangent semantics and full editable graph editor with proper quaternion handling.
 - Two-bone IK, poles, IK/FK, pose clipboard/mirroring/library; editable physics trajectories and motion baking.
@@ -62,10 +62,10 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 - Cube duplication/mirror/pivot/group tools, snapping and object-versus-component modes.
 - Editable indexed mesh topology, vertex/edge/face selection and transforms; extrusion/inset/subdivide/delete;
   merge/split/normals; mesh-specific undo commands.
-- Assimp OBJ/FBX/glTF/GLB import, model export, dedicated RBXM/RBXMX parsing. No model format is supported yet.
+- Model export, dedicated RBXM/RBXMX parsing, image texture and skeletal model import. Static OBJ/FBX/glTF/GLB import is implemented.
 - PNG import/export, texture painting/fill/erase/picker/palette/brush/opacity/resizing and stroke undo.
 - UV island editing, unwrap/pack/transform/snap/mirror, texture assignment, 3D painting and viewport synchronization.
-- Extend project schema with meshes, textures, UVs, materials, events and per-project workspace metadata.
+- Extend project schema with image textures, material assignments, events and per-project workspace metadata. Triangle meshes and per-vertex UVs are stored in version 2.
 
 ### Distribution/polish
 

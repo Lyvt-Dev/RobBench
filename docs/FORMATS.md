@@ -1,14 +1,14 @@
-# Version 1 formats
+# Versioned file formats
 
 Both formats are UTF-8 JSON, case-sensitive and independently versioned. Unknown versions are rejected.
 Units are Roblox studs and seconds. Coordinates are right-handed, +Y up, forward -Z. Matrices use
 column vectors. JSON quaternion order is **[x,y,z,w]**; internal GLM construction is `(w,x,y,z)`.
 Quaternions must be normalized. Euler XYZ controls are converted to quaternions; no Euler component
-interpolation is implied. There is no graph editor in version 0.1.
+interpolation is implied. There is no graph editor in version 0.2.
 
 ## .robbench
 
-Top-level keys: `format: "robbench"`, `version: 1`, `name`, `rigType`, `parts`, `clips`.
+Top-level keys: `format: "robbench"`, `version: 2`, `name`, `rigType`, `parts`, `clips`. Version 1 files can still be read.
 `rigType` is `R6`, `R15` or a custom label. Each part has:
 
 ```json
@@ -34,7 +34,7 @@ WorldChild = WorldParent * C0 * AnimatedTransform * inverse(C1)
 ```
 
 Root world transform is `C0 * AnimatedTransform * inverse(C1)`.
-Size scales only the rendered unit cube, not the child's joint hierarchy.
+Size scales only the rendered geometry, not the child's joint hierarchy.
 
 Each clip has `name`, `duration` (>0), `loop`, `tracks`. Each track has `joint` and sorted `keys`.
 Each key has `time`, `value` (position/rotation/scale transform), and `interpolation` integer:
@@ -44,8 +44,7 @@ rotation uses normalized shortest-path quaternion SLERP with the eased time para
 Outside keyed ranges, endpoint poses hold. Evaluation never implicitly wraps; playback wraps loop time.
 
 Save uses QSaveFile atomic commit. Reads are limited to 64 MiB, 10,000 parts, 1,000 clips and
-100,000 keys per track. This initial format contains block geometry and joint animation only.
-Mesh topology, image texture data, UVs, materials, events, and per-project workspace data are future schema additions.
+100,000 keys per track. Version 2 optionally stores a `mesh` array on each part. Each triangle vertex is an 11-number array: position XYZ, normal XYZ, color RGB and UV. Positions are normalized to part size, triangle vertex counts must be multiples of three, and the project is limited to one million vertices. Mesh geometry is omitted from animation-only exports. Image texture data, indexed editable topology, material assignments, events and per-project workspace data remain future additions.
 Application layout/settings live separately in QSettings.
 
 ## .rbanim

@@ -32,7 +32,7 @@ interactive installation and Roblox Studio playback remain to be verified; see t
 Windows: Visual Studio 2022 **Desktop development with C++**, CMake 3.25+, Git and vcpkg.
 Set `VCPKG_ROOT` to a bootstrapped vcpkg checkout. The manifest pins a baseline and supplies
 Qt, Vulkan headers/loader/Hpp, VMA, glslang, GLM, JSON, spdlog and GoogleTest.
-Assimp, tinygltf and stb are provisioned for later import/texturing work; they are not exposed as supported formats yet.
+Assimp handles static OBJ/FBX/glTF/GLB import. tinygltf and stb remain provisioned for later texturing/export work.
 
 ```powershell
 ./scripts/dev.ps1 configure windows-debug
