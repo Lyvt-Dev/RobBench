@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/KeyEditing.h"
 #include "core/Project.h"
 #include <QElapsedTimer>
 #include <QMainWindow>
@@ -35,6 +36,12 @@ class MainWindow final : public QMainWindow {
     QDoubleSpinBox *timeBox{};
     QDoubleSpinBox *durationBox{};
     QCheckBox *loop{};
+    QCheckBox *scaleWithDuration{};
+    std::vector<CopiedKey> keyClipboard;
+    void setupTimelineActions();
+    void copySelectedKeys();
+    void pasteSelectedKeys();
+    void scaleSelectedKeys();
     QLabel *selectedLabel{};
     QDoubleSpinBox *transforms[6]{};
     QDoubleSpinBox *dimensions[3]{};
@@ -58,6 +65,8 @@ class MainWindow final : public QMainWindow {
     bool save(bool saveAs = false);
     bool maybeSave();
     void exportClip();
+    void importModelFile();
+    void showUpdater();
     void togglePlay();
     void showError(const std::exception &);
     void createMenus();

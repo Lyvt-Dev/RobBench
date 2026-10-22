@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,14 @@ struct Transform {
     glm::vec3 scale{1};
     glm::mat4 matrix() const;
 };
+struct MeshVertex {
+    glm::vec3 position{0}, normal{0, 1, 0}, color{1};
+    glm::vec2 uv{0};
+};
+struct MeshGeometry {
+    std::vector<MeshVertex> vertices;
+};
+std::shared_ptr<const MeshGeometry> makeClassicHead();
 struct Part {
     std::string name;
     std::string joint;
@@ -19,6 +28,7 @@ struct Part {
     glm::vec3 size{1};
     Transform c0, c1;
     glm::vec3 color{0.6f, 0.65f, 0.75f};
+    std::shared_ptr<const MeshGeometry> mesh;
     bool visible{true};
     bool locked{false};
 };

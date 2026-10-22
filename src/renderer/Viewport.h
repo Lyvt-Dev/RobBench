@@ -59,7 +59,7 @@ class Viewport final : public QVulkanWindow {
     int dragPart{-1}, draggingAxis{-1};
     QPointF previous;
     glm::vec3 target{0, 2.5f, 0};
-    float yaw{.55f}, pitch{.22f}, distance{10};
+    float yaw{3.69f}, pitch{.22f}, distance{10};
     bool ortho{false};
 };
 } // namespace rb

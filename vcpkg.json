@@ -1,6 +1,6 @@
 {
   "name": "robbench",
-  "version-string": "0.1.0",
+  "version-string": "0.2.0",
   "description": "Native Qt and Vulkan Roblox animation editor",
   "dependencies": [
     {
@@ -9,7 +9,8 @@
       "features": [
         "widgets",
         "vulkan",
-        "windeployqt"
+        "windeployqt",
+        "network"
       ],
       "platform": "windows"
     },
@@ -18,7 +19,8 @@
       "default-features": false,
       "features": [
         "widgets",
-        "vulkan"
+        "vulkan",
+        "network"
       ],
       "platform": "!windows"
     },

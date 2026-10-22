@@ -1,36 +1,86 @@
 #include "ui/Timeline.h"
+#include <QKeyEvent>
+#include <QKeySequence>
 #include <QMouseEvent>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QWheelEvent>
 #include <algorithm>
 #include <cmath>
+#include <optional>
 namespace rb {
 Timeline::Timeline(QWidget *p) : QWidget(p) {
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
     setMinimumHeight(180);
-    setToolTip("Click to scrub • drag a key to move it • Ctrl+wheel to zoom");
+    setToolTip("Ctrl/Shift+click adds keys • drag empty space to box-select • drag selected keys together • "
+               "Ctrl+A/C/V • Delete • Esc");
+}
+const Clip *Timeline::clipData() const {
+    return project && clip < project->clips.size() ? &project->clips[clip] : nullptr;
+}
+void Timeline::notify() {
+    update();
+    if (selectionChanged)
+        selectionChanged();
+}
+void Timeline::setSelection(KeySelection value) {
+    selection_ = std::move(value);
+    selectionClip = clip;
+    notify();
+}
+void Timeline::selectAllKeys() {
+    KeySelection all;
+    if (auto *c = clipData())
+        for (auto &t : c->tracks)
+            for (auto &k : t.keys)
+                all.insert({t.joint, k.time});
+    setSelection(std::move(all));
 }
 void Timeline::sync() {
-    if (project) {
-        setMinimumSize(210 + static_cast<int>(project->clips[clip].duration * pixelsPerSecond),
+    if (auto *c = clipData()) {
+        setMinimumSize(static_cast<int>(std::min(16000000., 210 + c->duration * pixelsPerSecond)),
                        40 + static_cast<int>(project->parts.size()) * 24);
+        if (selectionClip != clip) {
+            selection_.clear();
+            selectionClip = clip;
+        }
+        KeySelection valid;
+        for (const auto &t : c->tracks)
+            for (const auto &k : t.keys)
+                if (selection_.contains({t.joint, k.time}))
+                    valid.insert({t.joint, k.time});
+        selection_ = std::move(valid);
     }
     update();
 }
 double Timeline::at(int x) const {
-    if (!project)
-        return 0;
-    return std::clamp(std::round((x - 190) / pixelsPerSecond * fps) / fps, 0., project->clips[clip].duration);
+    auto *c = clipData();
+    return c ? std::clamp(std::round((x - 190) / pixelsPerSecond * fps) / fps, 0., c->duration) : 0;
 }
-void Timeline::paintEvent(QPaintEvent *) {
+bool Timeline::event(QEvent *e) {
+    if (e->type() == QEvent::ShortcutOverride) {
+        auto *k = static_cast<QKeyEvent *>(e);
+        if (k->key() == Qt::Key_Delete || k->key() == Qt::Key_Backspace ||
+            k->matches(QKeySequence::SelectAll) || k->matches(QKeySequence::Copy) ||
+            k->matches(QKeySequence::Paste)) {
+            e->accept();
+            return true;
+        }
+    }
+    return QWidget::event(e);
+}
+void Timeline::paintEvent(QPaintEvent *event) {
     QPainter p(this);
-    p.fillRect(rect(), QColor("#22252c"));
-    if (!project)
+    p.fillRect(event->rect(), QColor("#20232a"));
+    auto *c = clipData();
+    if (!c)
         return;
-    const auto &c = project->clips[clip];
-    p.setPen(QColor("#6d7180"));
     double tick = std::max(1., std::ceil(60 / pixelsPerSecond * fps)) / fps;
-    for (double t = 0; t <= c.duration + 1e-8; t += tick) {
+    const double first =
+        std::max(0., std::floor((event->rect().left() - 190) / pixelsPerSecond / tick) * tick);
+    for (double t = first; t <= c->duration + 1e-8 && 190 + t * pixelsPerSecond <= event->rect().right() + 60;
+         t += tick) {
         int x = 190 + static_cast<int>(t * pixelsPerSecond);
         p.setPen(QColor("#30343e"));
         p.drawLine(x, 28, x, height());
@@ -39,74 +89,166 @@ void Timeline::paintEvent(QPaintEvent *) {
     }
     p.fillRect(0, 0, 188, height(), QColor("#292c34"));
     p.setPen(QColor("#b7bdca"));
-    p.drawText(10, 19, "Joint / Motor6D");
+    p.drawText(10, 19, QString("Joints • %1 selected").arg(selection_.size()));
     for (std::size_t i = 0; i < project->parts.size(); ++i) {
         int y = 30 + static_cast<int>(i) * 24;
+        if (y > event->rect().bottom() || y + 24 < event->rect().top())
+            continue;
         if (static_cast<int>(i) == selected)
             p.fillRect(0, y, width(), 24, QColor(122, 92, 170, 50));
         p.setPen(QColor("#c6cad4"));
         p.drawText(10, y + 17, QString::fromStdString(project->parts[i].joint));
         p.setPen(QColor("#333741"));
         p.drawLine(0, y + 23, width(), y + 23);
-        for (const auto &t : c.tracks)
+        for (const auto &t : c->tracks)
             if (t.joint == project->parts[i].joint)
                 for (const auto &k : t.keys) {
-                    int x = 190 + static_cast<int>(k.time * pixelsPerSecond);
-                    p.setPen(Qt::NoPen);
-                    p.setBrush(std::abs(k.time - time) < 1e-7 ? QColor("#f4cf84") : QColor("#aa89e6"));
+                    bool chosen = selection_.contains({t.joint, k.time});
+                    double timestamp = k.time + (chosen && dragging ? delta : 0);
+                    int x = 190 + static_cast<int>(timestamp * pixelsPerSecond);
+                    if (x < 185)
+                        continue;
+                    p.setPen(chosen ? QPen(QColor("#fff0c4"), 1) : QPen(Qt::NoPen));
+                    p.setBrush(chosen ? QColor("#eebc69") : QColor("#aa89e6"));
                     QPolygon d;
-                    d << QPoint(x, y + 6) << QPoint(x + 5, y + 12) << QPoint(x, y + 18)
-                      << QPoint(x - 5, y + 12);
+                    d << QPoint(x, y + 5) << QPoint(x + 6, y + 12) << QPoint(x, y + 19)
+                      << QPoint(x - 6, y + 12);
                     p.drawPolygon(d);
                 }
-    }
-    if (dragging) {
-        p.setPen(QColor("#f4cf84"));
-        int x = 190 + static_cast<int>(dropTime * pixelsPerSecond);
-        p.drawLine(x, 28, x, height());
     }
     p.setPen(QPen(QColor("#d2b7ff"), 2));
     int x = 190 + static_cast<int>(time * pixelsPerSecond);
     p.drawLine(x, 25, x, height());
+    if (marquee) {
+        p.setPen(QColor("#b595f2"));
+        p.setBrush(QColor(150, 110, 230, 45));
+        p.drawRect(QRect(pressPoint, currentPoint).normalized());
+    }
 }
 void Timeline::mousePressEvent(QMouseEvent *e) {
-    if (!project || e->button() != Qt::LeftButton)
+    auto *c = clipData();
+    if (!c || e->button() != Qt::LeftButton)
         return;
-    int row = (e->position().toPoint().y() - 30) / 24;
-    if (e->position().y() >= 30 && row >= 0 && row < static_cast<int>(project->parts.size())) {
-        if (selectPart)
-            selectPart(row);
-        if (e->position().x() > 185)
-            for (const auto &t : project->clips[clip].tracks)
+    setFocus();
+    pressPoint = currentPoint = e->position().toPoint();
+    int row = (pressPoint.y() - 30) / 24;
+    const bool additive =
+        e->modifiers().testFlag(Qt::ControlModifier) || e->modifiers().testFlag(Qt::ShiftModifier);
+    if (pressPoint.y() >= 30 && row >= 0 && row < static_cast<int>(project->parts.size())) {
+        std::optional<KeyRef> hit;
+        if (pressPoint.x() >= 185)
+            for (const auto &t : c->tracks)
                 if (t.joint == project->parts[row].joint)
                     for (const auto &k : t.keys)
-                        if (std::abs(190 + k.time * pixelsPerSecond - e->position().x()) < 8) {
-                            dragging = true;
-                            draggedJoint = t.joint;
-                            draggedTime = k.time;
-                            dropTime = k.time;
-                            if (seek)
-                                seek(k.time);
-                            return;
-                        }
+                        if (std::abs(190 + k.time * pixelsPerSecond - pressPoint.x()) < 9)
+                            hit = KeyRef{t.joint, k.time};
+        if (selectPart)
+            selectPart(row);
+        if (hit) {
+            if (additive) {
+                if (selection_.contains(*hit))
+                    selection_.erase(*hit);
+                else
+                    selection_.insert(*hit);
+                notify();
+                return;
+            }
+            if (!selection_.contains(*hit))
+                selection_ = {*hit};
+            dragging = true;
+            delta = 0;
+            if (seek)
+                seek(hit->time);
+            notify();
+            return;
+        }
     }
-    if (e->position().x() >= 190 && seek)
-        seek(at(e->position().toPoint().x()));
+    if (pressPoint.x() >= 190 && pressPoint.y() >= 28) {
+        marquee = true;
+        beforeMarquee = additive ? selection_ : KeySelection{};
+        if (!additive)
+            selection_.clear();
+        notify();
+    } else if (pressPoint.x() >= 190 && seek)
+        seek(at(pressPoint.x()));
 }
 void Timeline::mouseMoveEvent(QMouseEvent *e) {
+    currentPoint = e->position().toPoint();
+    auto *c = clipData();
+    if (!c)
+        return;
     if (dragging) {
-        dropTime = at(e->position().toPoint().x());
+        delta = std::round((currentPoint.x() - pressPoint.x()) / pixelsPerSecond * fps) / fps;
+        double low = 0, high = c->duration;
+        for (const auto &k : selection_) {
+            high = std::min(high, c->duration - k.time);
+        }
+        low = selection_.empty()
+                  ? 0
+                  : -std::min_element(selection_.begin(), selection_.end(), [](const auto &a, const auto &b) {
+                         return a.time < b.time;
+                     })->time;
+        delta = std::clamp(delta, low, high);
         update();
-    } else if ((e->buttons() & Qt::LeftButton) && e->position().x() >= 190 && seek)
-        seek(at(e->position().toPoint().x()));
+    } else if (marquee) {
+        auto rect = QRect(pressPoint, currentPoint).normalized();
+        selection_ = beforeMarquee;
+        for (std::size_t i = 0; i < project->parts.size(); ++i)
+            for (const auto &t : c->tracks)
+                if (t.joint == project->parts[i].joint)
+                    for (const auto &k : t.keys)
+                        if (rect.contains(QPoint(190 + static_cast<int>(k.time * pixelsPerSecond),
+                                                 42 + static_cast<int>(i) * 24)))
+                            selection_.insert({t.joint, k.time});
+        notify();
+    } else if ((e->buttons() & Qt::LeftButton) && currentPoint.x() >= 190 && seek)
+        seek(at(currentPoint.x()));
 }
-void Timeline::mouseReleaseEvent(QMouseEvent *) {
+void Timeline::mouseReleaseEvent(QMouseEvent *e) {
+    if (e->button() != Qt::LeftButton)
+        return;
     if (dragging) {
         dragging = false;
-        if (moveKey && dropTime != draggedTime)
-            moveKey(draggedJoint, draggedTime, dropTime);
+        if (std::abs(delta) > 1e-10 && moveKeys)
+            moveKeys(selection_, delta);
+        delta = 0;
         update();
     }
+    if (marquee) {
+        marquee = false;
+        if ((currentPoint - pressPoint).manhattanLength() < 4 && seek)
+            seek(at(currentPoint.x()));
+        notify();
+    }
+}
+void Timeline::keyPressEvent(QKeyEvent *e) {
+    if (e->key() == Qt::Key_Escape) {
+        dragging = marquee = false;
+        delta = 0;
+        selection_.clear();
+        notify();
+        return;
+    }
+    if (e->matches(QKeySequence::SelectAll)) {
+        selectAllKeys();
+        return;
+    }
+    if (e->matches(QKeySequence::Copy)) {
+        if (copySelection)
+            copySelection();
+        return;
+    }
+    if (e->matches(QKeySequence::Paste)) {
+        if (pasteSelection)
+            pasteSelection();
+        return;
+    }
+    if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) {
+        if (deleteSelection)
+            deleteSelection();
+        return;
+    }
+    QWidget::keyPressEvent(e);
 }
 void Timeline::wheelEvent(QWheelEvent *e) {
     if (e->modifiers() & Qt::ControlModifier) {

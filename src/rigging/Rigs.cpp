@@ -18,14 +18,14 @@ Project makeRig(const std::string &type) {
         part.color = color;
         p.parts.push_back(part);
     };
-    const glm::vec3 skin{.83f, .71f, .52f}, shirt{.42f, .39f, .70f}, pants{.27f, .30f, .40f};
-    add("HumanoidRootPart", "World", -1, {2, 2, 1}, {0, 3, 0}, {0, 0, 0}, shirt);
+    const glm::vec3 skin{.96f, .78f, .16f}, shirt{.08f, .32f, .84f}, pants{.32f, .65f, .18f};
+    add("HumanoidRootPart", "World", -1, {2, 2, 1}, {0, type == "R15" ? 3.3f : 3.f, 0}, {0, 0, 0}, shirt);
     p.parts[0].visible = false;
     if (type == "R6") {
         add("Torso", "RootJoint", 0, {2, 2, 1}, {0, 0, 0}, {0, 0, 0}, shirt);
         add("Head", "Neck", 1, {2, 1, 1}, {0, 1, 0}, {0, -.5f, 0}, skin);
-        add("Left Arm", "Left Shoulder", 1, {1, 2, 1}, {-1, 1, 0}, {.5f, 1, 0}, skin);
-        add("Right Arm", "Right Shoulder", 1, {1, 2, 1}, {1, 1, 0}, {-.5f, 1, 0}, skin);
+        add("Left Arm", "Left Shoulder", 1, {1, 2, 1}, {-1, .5f, 0}, {.5f, .5f, 0}, skin);
+        add("Right Arm", "Right Shoulder", 1, {1, 2, 1}, {1, .5f, 0}, {-.5f, .5f, 0}, skin);
         add("Left Leg", "Left Hip", 1, {1, 2, 1}, {-.5f, -1, 0}, {0, 1, 0}, pants);
         add("Right Leg", "Right Hip", 1, {1, 2, 1}, {.5f, -1, 0}, {0, 1, 0}, pants);
     } else {
@@ -45,6 +45,9 @@ Project makeRig(const std::string &type) {
             add(n + "Foot", n + "Ankle", leg + 1, {1, .3f, 1.4f}, {0, -.5f, 0}, {0, .15f, .2f}, pants);
         }
     }
+    for (auto &part : p.parts)
+        if (part.name == "Head")
+            part.mesh = makeClassicHead();
     p.validate();
     return p;
 }

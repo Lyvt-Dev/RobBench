@@ -116,3 +116,7 @@ See [validation results](docs/VALIDATION.md), [format specification](docs/FORMAT
 
 RobBench's original code is MIT licensed. Dependencies retain their respective licenses;
 see [third-party notices](THIRD_PARTY_NOTICES.md). No Blockbench source or assets are included.
+
+### 0.2.0 editing update
+
+Multi-select timeline keys with Ctrl/Shift-click, a selection box or Ctrl+A. Drag selected keys together, use Ctrl+C/V, or scale their timing from the Keyframes menu. **Scale keys with length** proportionally retimes the entire animation when its duration changes. Static OBJ/FBX/glTF/GLB models can be added from File → Import model. Help → Check for updates checks GitHub; Windows downloads are verified against the release's SHA256SUMS before installation. Checksums are not publisher signatures. See [release notes](docs/releases/v0.2.0.md) for compatibility and current limits.

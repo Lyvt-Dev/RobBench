@@ -53,6 +53,12 @@ jobs:
           $archive = Get-ChildItem RobBench-*.zip | Select-Object -First 1
           if (-not $archive) { throw "Portable ZIP was not generated" }
           ./scripts/verify-package.ps1 -Archive $archive.FullName
+      - name: Generate SHA256 checksums
+        if: matrix.configuration == 'release'
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem RobBench-*.zip,RobBench-*.exe | Sort-Object Name | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + "  " + $_.Name }
+          [IO.File]::WriteAllText((Join-Path $PWD "SHA256SUMS"), ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
       - uses: actions/upload-artifact@v4
         if: matrix.configuration == 'release'
         with:
@@ -60,6 +66,7 @@ jobs:
           path: |
             RobBench-*.zip
             RobBench-*.exe
+            SHA256SUMS
           if-no-files-found: error
   linux:
     runs-on: ubuntu-24.04
@@ -68,7 +75,7 @@ jobs:
       - name: Install development dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ qt6-base-dev libvulkan-dev mesa-vulkan-drivers glslang-tools libglm-dev nlohmann-json3-dev libspdlog-dev libgtest-dev vulkan-validationlayers xvfb xauth
+          sudo apt-get install -y cmake ninja-build g++ qt6-base-dev libvulkan-dev mesa-vulkan-drivers glslang-tools libglm-dev nlohmann-json3-dev libspdlog-dev libgtest-dev libassimp-dev vulkan-validationlayers xvfb xauth
           mkdir -p "$RUNNER_TEMP/vma"
           curl --fail --location https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.2.1/include/vk_mem_alloc.h --output "$RUNNER_TEMP/vma/vk_mem_alloc.h"
       - name: Configure
@@ -96,6 +103,8 @@ jobs:
         with:
           name: RobBench-windows-x64
           path: release
+      - name: Include plugin checksum
+        run: (cd plugins/roblox-studio && sha256sum RobBench.plugin.luau) >> release/SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           name: RobBench ${{ github.ref_name }}

@@ -30,9 +30,9 @@ static Transform readTransform(const json &j) {
 }
 json projectJson(const Project &p) {
     p.validate();
-    json j = {{"format", "robbench"}, {"version", 1},           {"name", p.name},
+    json j = {{"format", "robbench"}, {"version", 2},           {"name", p.name},
               {"rigType", p.rigType}, {"parts", json::array()}, {"clips", json::array()}};
-    for (const auto &part : p.parts)
+    for (const auto &part : p.parts) {
         j["parts"].push_back({{"name", part.name},
                               {"joint", part.joint},
                               {"parent", part.parent},
@@ -42,6 +42,13 @@ json projectJson(const Project &p) {
                               {"color", vec(part.color)},
                               {"visible", part.visible},
                               {"locked", part.locked}});
+        if (part.mesh) {
+            auto &vertices = j["parts"].back()["mesh"] = json::array();
+            for (const auto &v : part.mesh->vertices)
+                vertices.push_back({v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y,
+                                    v.normal.z, v.color.x, v.color.y, v.color.z, v.uv.x, v.uv.y});
+        }
+    }
     for (const auto &c : p.clips) {
         json clip = {{"name", c.name}, {"duration", c.duration}, {"loop", c.loop}, {"tracks", json::array()}};
         for (const auto &t : c.tracks) {
@@ -57,7 +64,7 @@ json projectJson(const Project &p) {
     return j;
 }
 Project projectFromJson(const json &j) {
-    if (j.at("format") != "robbench" || j.at("version") != 1)
+    if (j.at("format") != "robbench" || (j.at("version") != 1 && j.at("version") != 2))
         throw std::runtime_error("Unsupported RobBench format/version");
     if (!j.at("parts").is_array() || !j.at("clips").is_array())
         throw std::runtime_error("Parts and clips must be arrays");
@@ -78,6 +85,20 @@ Project projectFromJson(const json &j) {
         part.color = readVec(a.at("color"));
         part.visible = a.at("visible");
         part.locked = a.at("locked");
+        if (a.contains("mesh")) {
+            const auto &vertices = a.at("mesh");
+            if (!vertices.is_array() || vertices.size() > 1000000)
+                throw std::runtime_error("Invalid mesh array");
+            auto mesh = std::make_shared<MeshGeometry>();
+            mesh->vertices.reserve(vertices.size());
+            for (const auto &v : vertices) {
+                if (!v.is_array() || v.size() != 11)
+                    throw std::runtime_error("Invalid mesh vertex record");
+                mesh->vertices.push_back(
+                    {{v[0], v[1], v[2]}, {v[3], v[4], v[5]}, {v[6], v[7], v[8]}, {v[9], v[10]}});
+            }
+            part.mesh = mesh;
+        }
         p.parts.push_back(part);
     }
     for (const auto &c : j.at("clips")) {
@@ -195,6 +216,8 @@ json animationJson(const Project &p, std::size_t index, int fps) {
               {"interpolation", "baked-linear"},
               {"parts", projectJson(p).at("parts")},
               {"frames", json::array()}};
+    for (auto &part : j["parts"])
+        part.erase("mesh");
     // Retain original key times as well as uniform samples, including both sides of a step.
     std::vector<double> times{0, c.duration};
     for (int i = 1; i < static_cast<int>(std::ceil(c.duration * fps)); ++i)

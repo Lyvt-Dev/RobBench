@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QIcon>
 #include <QMessageBox>
 #include <QPalette>
 #include <QSettings>
@@ -16,7 +17,8 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("RobBench");
     QApplication::setOrganizationName("RobBench");
-    QApplication::setApplicationVersion("0.1.0");
+    QApplication::setApplicationVersion("0.2.0");
+    QApplication::setWindowIcon(QIcon(":/branding/RobBench.png"));
     auto arguments = app.arguments();
     const bool smoke = arguments.contains("--smoke-test");
     if (smoke) {

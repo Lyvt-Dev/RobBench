@@ -1,6 +1,7 @@
 #include "io/Serialization.h"
 #include "renderer/Viewport.h"
 #include "ui/MainWindow.h"
+#include "ui/Timeline.h"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -42,6 +43,38 @@ void MainWindow::startSmokeTest(const QString &dir, const QString &rigType) {
     saveProject(project, pathOf(dir + "/smoke.robbench"));
     project = loadProject(pathOf(dir + "/smoke.robbench"));
     exportAnimation(project, 0, pathOf(dir + "/smoke.rbanim"));
+    refresh();
+    QKeyEvent selectKeys(QEvent::KeyPress, Qt::Key_A, Qt::ControlModifier);
+    QApplication::sendEvent(timeline, &selectKeys);
+    if (timeline->selection().size() != 3)
+        throw std::runtime_error("Smoke: timeline Ctrl+A did not select all keys");
+    const auto originalKeys = projectJson(project);
+    auto subset = timeline->selection();
+    for (auto it = subset.begin(); it != subset.end();)
+        if (it->time >= 2)
+            it = subset.erase(it);
+        else
+            ++it;
+    timeline->setSelection(subset);
+    const QPointF keyPoint(190, 42 + arm * 24);
+    QMouseEvent keyPress(QEvent::MouseButtonPress, keyPoint, keyPoint, Qt::LeftButton, Qt::LeftButton,
+                         Qt::NoModifier);
+    QApplication::sendEvent(timeline, &keyPress);
+    const QPointF shifted = keyPoint + QPointF(30, 0);
+    QMouseEvent keyMove(QEvent::MouseMove, shifted, shifted, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(timeline, &keyMove);
+    QMouseEvent keyRelease(QEvent::MouseButtonRelease, shifted, shifted, Qt::LeftButton, Qt::NoButton,
+                           Qt::NoModifier);
+    QApplication::sendEvent(timeline, &keyRelease);
+    const auto movedKeys = copyKeys(project.clips[0], timeline->selection());
+    if (movedKeys.size() != 2 || std::abs(movedKeys[0].key.time - .2) > 1e-8 ||
+        std::abs(movedKeys[1].key.time - 1.2) > 1e-8)
+        throw std::runtime_error("Smoke: timeline group drag changed spacing or lost keys");
+    history.undo();
+    if (projectJson(project) != originalKeys)
+        throw std::runtime_error("Smoke: group keyframe drag undo failed");
+    timeline->setSelection({});
+
     seek(.5);
     if (std::abs(transforms[3]->value() - 35) > 0.01)
         throw std::runtime_error("Smoke: interpolated inspector pose is wrong");

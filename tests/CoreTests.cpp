@@ -90,7 +90,7 @@ TEST(Animation, KeyInsertionReplacementDeletion) {
 TEST(Serialization, InvalidDataRejected) {
     auto p = makeRig("R15");
     auto j = projectJson(p);
-    j["version"] = 2;
+    j["version"] = 99;
     EXPECT_THROW(projectFromJson(j), std::runtime_error);
     j = projectJson(p);
     j["parts"][0]["c0"]["rotation"] = {0, 0, 0, 0};

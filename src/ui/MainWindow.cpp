@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "io/ModelImporter.h"
 #include "io/Serialization.h"
 #include "renderer/Viewport.h"
 #include "ui/Timeline.h"
@@ -86,6 +87,7 @@ MainWindow::MainWindow(QVulkanInstance *instance) : project(makeRig("R15")) {
     };
     createPanels();
     createMenus();
+    setupTimelineActions();
     createTransformTools();
     connect(&history, &QUndoStack::cleanChanged, this, [this] { setWindowModified(!history.isClean()); });
     setWindowTitle("RobBench — Untitled[*]");
@@ -244,7 +246,9 @@ void MainWindow::createPanels() {
         if (refreshing)
             return;
         double d = durationBox->value();
-        change("Change duration", [=, this](Project &p) { p.clips[activeClip].duration = d; });
+        change("Change duration",
+               [=, this](Project &p) { resizeClip(p.clips[activeClip], d, scaleWithDuration->isChecked()); });
+        timeline->setSelection({});
     });
     loop = new QCheckBox("Loop");
     controls->addWidget(loop);
@@ -259,6 +263,11 @@ void MainWindow::createPanels() {
     connect(fpsBox, &QComboBox::currentIndexChanged, this, [this](int i) {
         timeline->fps = i == 0 ? 24 : i == 1 ? 30 : 60;
     });
+    layout->addLayout(controls);
+    controls = new QHBoxLayout;
+    scaleWithDuration = new QCheckBox("Scale keys with length");
+    scaleWithDuration->setChecked(true);
+    controls->addWidget(scaleWithDuration);
     interpolation = new QComboBox;
     interpolation->addItems({"Linear", "Step", "Ease In", "Ease Out", "Ease In Out"});
     controls->addWidget(interpolation);
@@ -283,28 +292,8 @@ void MainWindow::createPanels() {
         seek(t);
     };
     timeline->selectPart = [this](int i) { select(i); };
-    timeline->moveKey = [this](std::string joint, double old, double next) {
-        change("Move keyframe", [=, this](Project &p) {
-            auto &c = p.clips[activeClip];
-            for (auto &t : c.tracks)
-                if (t.joint == joint) {
-                    for (const auto &k : t.keys)
-                        if (std::abs(k.time - next) < 1e-7)
-                            throw std::runtime_error("A keyframe already exists at the destination");
-                    auto it = std::find_if(t.keys.begin(), t.keys.end(),
-                                           [=](const Keyframe &k) { return std::abs(k.time - old) < 1e-7; });
-                    if (it == t.keys.end())
-                        throw std::runtime_error("Keyframe not found");
-                    auto key = *it;
-                    t.keys.erase(it);
-                    key.time = next;
-                    setKey(c, joint, key);
-                    break;
-                }
-        });
-        seek(next);
-    };
 }
+
 void MainWindow::createMenus() {
     auto action = [this](QMenu *menu, QString label, QKeySequence shortcut, std::function<void()> fn) {
         auto *a = menu->addAction(label);
@@ -327,6 +316,7 @@ void MainWindow::createMenus() {
     action(file, "Save &As…", QKeySequence::SaveAs, [this] { save(true); });
     file->addSeparator();
     action(file, "Export animation (.rbanim)…", QKeySequence("Ctrl+Shift+E"), [this] { exportClip(); });
+    action(file, "Import model…", QKeySequence("Ctrl+I"), [this] { importModelFile(); });
     file->addSeparator();
     action(file, "Exit", QKeySequence::Quit, [this] { close(); });
     auto *edit = menuBar()->addMenu("&Edit");
@@ -478,9 +468,10 @@ void MainWindow::createMenus() {
     action(view, "Restore workspace layout", {},
            [this] { restoreState(QSettings().value("customLayout").toByteArray(), 1); });
     auto *help = menuBar()->addMenu("&Help");
+    action(help, "Check for updates…", {}, [this] { showUpdater(); });
     action(help, "About RobBench", {}, [this] {
         QMessageBox::about(this, "RobBench",
-                           "RobBench 0.1.0 — native C++20 / Qt 6 / Vulkan 1.3\nR6/R15 animation authoring "
+                           "RobBench 0.2.0 — native C++20 / Qt 6 / Vulkan 1.3\nR6/R15 animation authoring "
                            "foundation.\nIndependent project; not affiliated with Roblox or Blockbench.\nSee "
                            "docs/STATUS.md for verified capabilities and limitations.");
     });
@@ -658,6 +649,12 @@ void MainWindow::insertKey() {
            [=, this](Project &p) { setKey(p.clips[activeClip], joint, {t, pose, easing}); });
 }
 void MainWindow::removeKey() {
+    if (!timeline->selection().empty()) {
+        const auto keys = timeline->selection();
+        change("Delete selected keyframes", [=, this](Project &p) { deleteKeys(p.clips[activeClip], keys); });
+        timeline->setSelection({});
+        return;
+    }
     if (viewport->selected < 0)
         return;
     auto joint = project.parts[viewport->selected].joint;
@@ -798,5 +795,27 @@ void MainWindow::closeEvent(QCloseEvent *e) {
     s.setValue("layout", saveState(1));
     QFile::remove(recoveryPath());
     e->accept();
+}
+} // namespace rb
+
+namespace rb {
+void MainWindow::importModelFile() {
+    auto filename =
+        QFileDialog::getOpenFileName(this, "Import static model", {}, "Models (*.obj *.fbx *.gltf *.glb)");
+    if (filename.isEmpty())
+        return;
+    bool accepted = false;
+    double scale =
+        QInputDialog::getDouble(this, "Model scale", "Source units to studs", 1, .0001, 10000, 4, &accepted);
+    if (!accepted)
+        return;
+    std::size_t count = 0;
+    change("Import model",
+           [&, this](Project &p) { count = importModel(p, pathOf(filename), static_cast<float>(scale)); });
+    if (count)
+        statusBar()->showMessage(
+            QString("Imported %1 mesh objects. Texture images and skinned animation are not imported.")
+                .arg(count),
+            10000);
 }
 } // namespace rb

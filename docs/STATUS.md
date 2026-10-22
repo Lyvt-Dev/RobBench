@@ -77,3 +77,13 @@ acceptance are not complete.** No final parity, performance, avatar accuracy or 
 
 Next acceptance gate: run both Studio workflows and fix any API/runtime issues, then verify Windows installation
 and GPU rendering on a clean machine. Existing tests and the authoring/export path must remain intact.
+
+## 0.2.0 update
+
+Timeline keys support Ctrl/Shift-click, box selection, Ctrl+A/C/V, Delete, group dragging and selected timing scaling (Keyframes menu). Changing duration scales all key times when **Scale keys with length** is enabled. Disable it to preserve absolute times; shortening past existing keys is rejected. All mutations use undo/redo and reject key collisions transactionally.
+
+File → Import model imports static OBJ/FBX/glTF/GLB geometry through Assimp, including normals, UV data and vertex/diffuse colors. Imported meshes are selectable and transformable and persist in native project format 2. Versions 1 and 2 can be opened; exports use version 2. Image textures and skeletal meshes are not imported. Meshes are attached to the project root and can be positioned with existing transform tools.
+
+Help → Check for updates retrieves the latest GitHub release. On Windows, the installer is streamed to an atomic temporary save, checked for exact size and SHA256, and checked again before launch. Installation is user initiated and prompts to save pending work. Optional private-repository credentials are not persisted and are sent only to api.github.com; redirect hosts are restricted to GitHub HTTPS asset hosts. Other platforms use the browser release link. SHA256SUMS does not establish publisher identity and is not Windows Authenticode signing.
+
+Windows packages contain the Release GUI executable and runtime dependencies, without a console subsystem. Debug builds remain in CI to catch development problems. Classic rig previews now use colored block bodies and independently generated rounded heads; accurate per-character rigs still come from the existing Studio rig exchange workflow.

@@ -12,6 +12,8 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <map>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <vk_mem_alloc.h>
@@ -22,11 +24,11 @@ void check(VkResult r, const char *what) {
         throw std::runtime_error(std::string(what) + ": Vulkan error " + std::to_string(r));
 }
 struct Vertex {
-    glm::vec3 position, normal;
+    glm::vec3 position, normal, color{1};
 };
 struct Push {
     glm::mat4 mvp;
-    glm::vec4 rotation, color;
+    glm::vec4 normalX, normalY, normalZ, color;
 };
 class Renderer final : public QVulkanWindowRenderer {
     Viewport &window;
@@ -37,6 +39,61 @@ class Renderer final : public QVulkanWindowRenderer {
     VkPipeline pipeline{};
     VkPipeline overlayPipeline{};
     VkPipelineCache cache{};
+    struct MeshFrame {
+        VkBuffer buffer{};
+        VmaAllocation allocation{};
+        VkDeviceSize capacity{};
+        void *mapped{};
+        std::vector<std::shared_ptr<const MeshGeometry>> owners;
+        std::map<const MeshGeometry *, std::pair<uint32_t, uint32_t>> ranges;
+    };
+    std::array<MeshFrame, QVulkanWindow::MAX_CONCURRENT_FRAME_COUNT> meshFrames;
+    void prepareMeshes(MeshFrame &frame) {
+        std::vector<std::shared_ptr<const MeshGeometry>> desired;
+        std::set<const MeshGeometry *> seen;
+        if (window.project)
+            for (const auto &part : window.project->parts)
+                if (part.mesh && seen.insert(part.mesh.get()).second)
+                    desired.push_back(part.mesh);
+        if (desired == frame.owners)
+            return;
+        std::size_t total = 0;
+        for (const auto &mesh : desired)
+            total += mesh->vertices.size();
+        if (total > 1000000)
+            throw std::runtime_error("Scene exceeds GPU geometry limit");
+        const auto bytes = total * sizeof(Vertex);
+        // This frame slot has completed before QVulkanWindow calls startNextFrame.
+        if (bytes > frame.capacity) {
+            if (frame.buffer)
+                vmaDestroyBuffer(allocator, frame.buffer, frame.allocation);
+            frame.buffer = VK_NULL_HANDLE;
+            frame.capacity = 0;
+            VkBufferCreateInfo bi{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+            bi.size = std::max<std::size_t>(4096, bytes);
+            bi.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            VmaAllocationCreateInfo ac{};
+            ac.usage = VMA_MEMORY_USAGE_AUTO;
+            ac.flags =
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            VmaAllocationInfo info{};
+            check(vmaCreateBuffer(allocator, &bi, &ac, &frame.buffer, &frame.allocation, &info),
+                  "Upload mesh geometry");
+            frame.capacity = bi.size;
+            frame.mapped = info.pMappedData;
+        }
+        frame.ranges.clear();
+        auto *output = static_cast<Vertex *>(frame.mapped);
+        uint32_t offset = 0;
+        for (const auto &mesh : desired) {
+            frame.ranges[mesh.get()] = {offset, static_cast<uint32_t>(mesh->vertices.size())};
+            for (const auto &vertex : mesh->vertices)
+                output[offset++] = {vertex.position, vertex.normal, vertex.color};
+        }
+        if (bytes)
+            check(vmaFlushAllocation(allocator, frame.allocation, 0, bytes), "Flush mesh vertices");
+        frame.owners = std::move(desired);
+    }
     bool ready{false};
 #if QT_VERSION < QT_VERSION_CHECK(6, 9, 0)
     std::array<VkFence, QVulkanWindow::MAX_CONCURRENT_FRAME_COUNT> completion{};
@@ -136,14 +193,15 @@ class Renderer final : public QVulkanWindowRenderer {
             stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
             stages[1].module = frag;
             VkVertexInputBindingDescription binding{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-            VkVertexInputAttributeDescription attrs[2]{
+            VkVertexInputAttributeDescription attrs[3]{
                 {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
-                {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)}};
+                {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
+                {2, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, color)}};
             VkPipelineVertexInputStateCreateInfo vi{
                 VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
             vi.vertexBindingDescriptionCount = 1;
             vi.pVertexBindingDescriptions = &binding;
-            vi.vertexAttributeDescriptionCount = 2;
+            vi.vertexAttributeDescriptionCount = 3;
             vi.pVertexAttributeDescriptions = attrs;
             VkPipelineInputAssemblyStateCreateInfo ia{
                 VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
@@ -226,6 +284,11 @@ class Renderer final : public QVulkanWindowRenderer {
         }
         pending.fill(false);
 #endif
+        for (auto &frame : meshFrames) {
+            if (frame.buffer)
+                vmaDestroyBuffer(allocator, frame.buffer, frame.allocation);
+            frame = MeshFrame{};
+        }
         if (buffer)
             vmaDestroyBuffer(allocator, buffer, allocation);
         buffer = VK_NULL_HANDLE;
@@ -267,16 +330,33 @@ class Renderer final : public QVulkanWindowRenderer {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
             VkDeviceSize offset = 0;
             vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
+            auto &meshes = meshFrames[window.currentFrame()];
+            try {
+                prepareMeshes(meshes);
+            } catch (const std::exception &e) {
+                ready = false;
+                if (window.failed)
+                    window.failed(QString::fromUtf8(e.what()));
+            }
+            VkBuffer bound = buffer;
             auto vpMatrix = window.viewProjection();
-            auto draw = [&](glm::mat4 model, glm::vec3 color, bool unlit = false) {
-                glm::mat3 basis(model);
-                for (int i = 0; i < 3; ++i)
-                    basis[i] = glm::normalize(basis[i]);
-                auto q = glm::normalize(glm::quat_cast(basis));
-                Push push{vpMatrix * model, {q.x, q.y, q.z, q.w}, {color, unlit ? 0.f : 1.f}};
+            auto draw = [&](glm::mat4 model, glm::vec3 color, bool unlit = false, uint32_t first = 0,
+                            uint32_t count = 36, VkBuffer vertexBuffer = VK_NULL_HANDLE) {
+                auto normal = glm::transpose(glm::inverse(glm::mat3(model)));
+                Push push{vpMatrix * model,
+                          glm::vec4(normal[0], 0),
+                          glm::vec4(normal[1], 0),
+                          glm::vec4(normal[2], 0),
+                          {color, unlit ? 0.f : 1.f}};
+                const auto target = vertexBuffer ? vertexBuffer : buffer;
+                if (bound != target) {
+                    VkDeviceSize offset = 0;
+                    vkCmdBindVertexBuffers(cmd, 0, 1, &target, &offset);
+                    bound = target;
+                }
                 vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                    sizeof(push), &push);
-                vkCmdDraw(cmd, 36, 1, 0, 0);
+                vkCmdDraw(cmd, count, 1, first, 0);
             };
             if (window.showGrid)
                 for (int i = -10; i <= 10; ++i) {
@@ -295,7 +375,12 @@ class Renderer final : public QVulkanWindowRenderer {
                         continue;
                     auto color =
                         static_cast<int>(i) == window.selected ? glm::vec3(.74f, .52f, .98f) : part.color;
-                    draw(glm::scale(worlds[i], window.partSize(i)), color);
+                    if (part.mesh && meshes.ranges.contains(part.mesh.get())) {
+                        auto range = meshes.ranges.at(part.mesh.get());
+                        draw(glm::scale(worlds[i], window.partSize(i)), color, false, range.first,
+                             range.second, meshes.buffer);
+                    } else
+                        draw(glm::scale(worlds[i], window.partSize(i)), color);
                 }
             }
             if (overlayPipeline)

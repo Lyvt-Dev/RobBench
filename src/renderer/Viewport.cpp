@@ -35,14 +35,14 @@ void Viewport::focusSelected() {
 }
 void Viewport::setView(int axis) {
     pitch = 0;
-    yaw = 0;
+    yaw = glm::pi<float>();
     if (axis == 1)
         yaw = glm::half_pi<float>();
     if (axis == 2) {
         pitch = glm::half_pi<float>() - .001f;
     }
     if (axis == 3)
-        yaw = glm::pi<float>();
+        yaw = 0;
     requestUpdate();
 }
 void Viewport::setOrthographic(bool e) {
@@ -76,6 +76,30 @@ int Viewport::pick(QPointF point) const {
                 lo = std::max(lo, std::min(t1, t2));
                 hi = std::min(hi, std::max(t1, t2));
             }
+        }
+        if (hit && lo <= hi && part.mesh) {
+            float meshHit = 1e30f;
+            for (std::size_t v = 0; v + 2 < part.mesh->vertices.size(); v += 3) {
+                auto a = part.mesh->vertices[v].position, b = part.mesh->vertices[v + 1].position,
+                     c = part.mesh->vertices[v + 2].position;
+                auto edge1 = b - a, edge2 = c - a, h = glm::cross(d, edge2);
+                float det = glm::dot(edge1, h);
+                if (std::abs(det) < 1e-8f)
+                    continue;
+                auto s = o - a;
+                float u = glm::dot(s, h) / det;
+                if (u < 0 || u > 1)
+                    continue;
+                auto q = glm::cross(s, edge1);
+                float bary = glm::dot(d, q) / det;
+                if (bary < 0 || u + bary > 1)
+                    continue;
+                float distance = glm::dot(edge2, q) / det;
+                if (distance >= 0)
+                    meshHit = std::min(meshHit, distance);
+            }
+            hit = meshHit < 1e30f;
+            lo = meshHit;
         }
         if (hit && lo <= hi && lo < best) {
             best = lo;

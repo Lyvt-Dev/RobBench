@@ -27,6 +27,7 @@ void Project::validate() const {
         throw std::runtime_error("Project must contain parts and at least one animation");
     std::unordered_set<std::string> names, joints;
     int roots = 0;
+    std::size_t vertices = 0;
     for (std::size_t i = 0; i < parts.size(); ++i) {
         const auto &p = parts[i];
         if (p.name.empty() || !names.insert(p.name).second || p.joint.empty() ||
@@ -38,6 +39,15 @@ void Project::validate() const {
             ++roots;
         if (!finite(p.size) || glm::any(glm::lessThanEqual(p.size, glm::vec3(0))) || !finite(p.color))
             throw std::runtime_error("Invalid part dimensions or color");
+        if (p.mesh) {
+            vertices += p.mesh->vertices.size();
+            if (vertices > 1000000 || p.mesh->vertices.empty() || p.mesh->vertices.size() % 3)
+                throw std::runtime_error("Mesh exceeds triangle/vertex limits");
+            for (const auto &v : p.mesh->vertices)
+                if (!finite(v.position) || !finite(v.normal) || !finite(v.color) || !std::isfinite(v.uv.x) ||
+                    !std::isfinite(v.uv.y) || glm::length(v.normal) < 1e-6f)
+                    throw std::runtime_error("Invalid mesh vertex");
+        }
         valid(p.c0);
         valid(p.c1);
         if (glm::length(p.c0.scale - glm::vec3(1)) > 0.0001f ||
