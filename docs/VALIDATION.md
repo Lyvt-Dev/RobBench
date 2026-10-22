@@ -30,3 +30,11 @@ Not executed: Roblox Studio plugin installation or runtime, actual avatar API re
 Windows compilation, Windows clean-machine packages, tagged GitHub release, macOS, hardware performance or VRAM tests.
 Luau compilation checks syntax, not availability or runtime behavior of Roblox services.
 Do not interpret software-Vulkan smoke success as a 60 FPS or GTX 1060 acceptance result.
+
+## CI follow-up — 2026-10-22
+
+[Run 39689916426](https://github.com/Lyvt-Dev/RobBench/actions/runs/39689916426) built and tested
+Windows Debug and Release successfully and produced the Windows ZIP/NSIS artifact. This verifies compilation,
+core tests and package generation, not GPU rendering or installation on a clean Windows machine.
+The Ubuntu 24.04 job failed at configure because Qt 6.4 uses `FILENAME_VARIABLE` for the deployment script
+output; Qt 6.5+ uses `OUTPUT_SCRIPT`. CMake now chooses the appropriate spelling.
