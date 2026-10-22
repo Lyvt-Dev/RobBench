@@ -56,3 +56,18 @@ Debug: **21/21 passed** (1.66 seconds), with validation enabled and no reported 
 Release: **21/21 passed** (1.30 seconds).
 `RobBench --check-runtime` passed locally. Windows CI additionally extracts the portable ZIP and runs this
 mode to check required DLL/native Qt-platform startup; that mode explicitly does not test a Vulkan device.
+
+### Verified CI artifact for 0.1.1
+
+[Run 39759425592](https://github.com/Lyvt-Dev/RobBench/actions/runs/39759425592),
+source commit `b2721bfeea156b9b44905bce4bf6012c76f60517`, completed successfully:
+
+- Ubuntu 24.04 / Qt 6.4: **21/21 tests passed**, including both native Vulkan workflows (2.93 seconds).
+- Windows Debug: build and tests passed.
+- Windows Release: **19/19 core tests passed**, ZIP/NSIS packaging passed, and the extracted portable
+  application passed the native-platform/runtime startup check. GPU rendering was deliberately not tested by that check.
+- Release Linux TGZ generation also succeeded locally for version 0.1.1.
+
+[Download the Windows ZIP and installer artifact](https://github.com/Lyvt-Dev/RobBench/actions/runs/39759425592/artifacts/12417088501).
+The artifact is tied to the source commit above and expires on 2027-01-20 under the repository's retention policy.
+Real Windows GPU rendering, clean-machine interactive installation and Roblox Studio playback are still outstanding.

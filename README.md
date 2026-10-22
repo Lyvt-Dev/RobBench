@@ -21,6 +21,13 @@ See [verified capabilities and remaining work](docs/STATUS.md) before evaluating
 - Versioned baked `.rbanim` export/import and a Studio companion plugin.
 - Add/resize/delete cubes. Advanced mesh, texture, UV and IK tools are not implemented.
 
+## Windows download
+
+[RobBench 0.1.1 — portable ZIP and installer](https://github.com/Lyvt-Dev/RobBench/actions/runs/39759425592/artifacts/12417088501)
+from the [verified CI run](https://github.com/Lyvt-Dev/RobBench/actions/runs/39759425592).
+The outer artifact ZIP contains the portable package and NSIS installer. Build/core tests and extracted-runtime
+startup passed; actual GPU rendering and clean-machine installation remain to be verified.
+
 ## Build
 
 Windows: Visual Studio 2022 **Desktop development with C++**, CMake 3.25+, Git and vcpkg.
